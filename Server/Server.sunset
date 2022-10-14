@@ -1,0 +1,148 @@
+setpheapvar
+
+import(Windows/Form)
+import(Random)
+import(Windows/Drawing/Shapes)
+import(Windows/Net/UDPServer)
+import(Windows/MessageBox)
+
+int ballXMomentum int ballYMomentum int ballx int bally int ballx0 int bally0
+
+shr playery becomes 0
+shr player0y becomes 0
+
+constant int playerx becomes 1
+constant int player0x becomes 483
+
+int timesMultied becomes 0
+
+UDPServer innerServer
+
+bool gameStarted becomes false
+ 
+func(int playery) calculateMomentum {
+	if (timesMultied,<=,2) {
+		if (Random.gen(3),=,0) {
+			ballXMomentum becomes ballXMomentum*2
+			++timesMultied
+		}
+	}
+	ballXMomentum becomes ballXMomentum*(-1)
+	ballYMomentum becomes ((bally-(25))-playery)/8
+}
+func(byte b,byte b0) toShr shr {
+	
+	retn((b*100h)+b0)
+	
+}
+func(shr playerY) toBytes byte# {
+
+	byte# bytes becomes #2
+	
+	byte b0
+	byte b becomes 0
+	if (playerY,>=,100h) {
+		b becomes 1
+		b0 becomes cast(playerY-100h,byte)
+	}
+	else {
+		b0 becomes cast(playerY,byte)
+	}
+	
+	bytes[0] becomes b
+	bytes[1] becomes b0
+	retn(bytes)
+	
+}
+innerServer becomes new(UDPServer,34665)
+if (innerServer.lastError,=,10048) {
+	retn ; Server already up on this port
+}
+while (true) {
+	byte# data becomes innerServer.listen
+	if (data[0],=,1) {
+		; New Player Connection
+		if (playery,=,0) {
+			; Player 1
+			playery becomes 175
+			byte# resp becomes #,(1)
+			innerServer.respond(resp,1)
+		}
+		else {
+			if (player0y,=,0) {
+				; Player 2
+				player0y becomes 175
+				byte# resp becomes #,(2)
+				innerServer.respond(resp,1)
+				; Start game
+				int xDiff becomes Random.genXch(200)
+				ballx becomes 235-xDiff
+				bally becomes 225-Random.genXch(200)
+				ballx0 becomes 235+xDiff
+				ballXMomentum becomes Random.gen(1)-1
+				if (ballXMomentum,=,0) { ballXMomentum becomes 1 }
+				gameStarted becomes true
+			}
+			else {
+				; Player 3?
+				byte# resp becomes #,(3)
+				innerServer.respond(resp,1)
+			}
+			
+		}
+	}
+	else { if (data[0],=,2) {
+		; Timer Tick (Player 1)
+		if (!gameStarted) {
+			byte# resp becomes #,(1)
+			innerServer.respond(resp,1)
+			continue
+		}
+		playery becomes toShr(data[1],data[2])
+		
+		ballx becomes ballx+ballXMomentum
+		bally becomes bally+ballYMomentum
+		ballx0 becomes ballx0-ballXMomentum
+		
+		if (Shapes.areRectsIntersecting(Shapes.createNativeRect(playerx,playery,10,75),Shapes.createNativeRect(ballx,bally,25,25))) {
+			calculateMomentum(playery)
+		}
+		else {
+			if (Shapes.areRectsIntersecting(Shapes.createNativeRect(player0x,player0y,10,75),Shapes.createNativeRect(ballx,bally,25,25))) {
+				calculateMomentum(player0y)
+			}
+			else {
+				if (bally,<=,0) {
+					bally becomes 0
+					ballYMomentum becomes ballYMomentum*(-1)
+				}	
+				else {
+					if (bally,>=,453) {
+						bally becomes 453
+						ballYMomentum becomes ballYMomentum*(-1)
+					}
+					
+				}
+			}
+		}
+		byte# nsh becomes toBytes(player0y)
+		byte# nsh0 becomes toBytes(cast(ballx,shr))
+		byte# nsh1 becomes toBytes(cast(bally,shr))
+		byte# resp becomes #,(2,nsh[0],nsh[1],nsh0[0],nsh0[1],nsh1[0],nsh1[1])
+		innerServer.respond(resp,7)
+			
+	} else { if(data[0],=,3) {
+		; Timer Tick (Player 2)
+		if (!gameStarted) {
+			byte# resp becomes #,(1)
+			innerServer.respond(resp,1)
+			continue
+		}
+		player0y becomes toShr(data[1],data[2])
+		byte# nsh becomes toBytes(playery)
+		byte# nsh0 becomes toBytes(cast(ballx0,shr))
+		byte# nsh1 becomes toBytes(cast(bally,shr))
+		byte# resp becomes #,(2,nsh[0],nsh[1],nsh0[0],nsh0[1],nsh1[0],nsh1[1])
+		innerServer.respond(resp,7)
+	}}}
+}

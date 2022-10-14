@@ -1,0 +1,135 @@
+setpheapvar
+
+import(Windows/Form)
+import(Windows/FormEventArgs)
+import(Windows/Components/Rectangle)
+import(Windows/KeyEventArgs)
+import(ASCIIKey)
+import(Windows/Components/Ellipse)
+import(Random)
+import(Windows/TimerEventArgs)
+import(Windows/Net/UDPClient)
+import(Windows/MessageBox)
+
+dllref(Kernel32,int) ExitProcess void
+
+Form form becomes new(Form,"",100,100,500,500)
+Rectangle player becomes new(Rectangle)
+Rectangle player0 becomes new(Rectangle)
+Ellipse ball
+int playerYMomentum
+constant int playerYSpeed becomes 8
+UDPClient client becomes new(UDPClient,"127.0.0.1",34665)
+bool isPlayer1
+bool gameStarted becomes false
+func(Rectangle# rs) showRects {
+	foreach (r,rs) {
+		r.width becomes 10
+		r.height becomes 75
+		form.components.add(r)
+	}	
+}
+func(Rectangle r,int offset) offsetY {
+	if (offset,<,0) {
+		if (r.y,<,offset*(-1)) {
+			retn
+		}
+	}
+	else {
+		if (offset,>,0) {
+			if (r.y,>,400-offset) {
+				retn
+			}
+		}
+		else { retn }
+	}
+	r.y becomes r.y+offset
+	form.rePaint
+}
+func(TimerEventArgs e) onTick {
+	
+	if (playerYMomentum,=/=,0) { offsetY(player,playerYMomentum) }
+	
+	byte inb
+	if (isPlayer1) { inb becomes 2 }
+	else { inb becomes 3 }
+	shr playerY becomes cast(player.y,shr)
+	byte b0
+	byte b becomes 0
+	if (playerY,>=,100h) {
+		b becomes 1
+		b0 becomes cast(playerY-100h,byte)
+	}
+	else {
+		b0 becomes cast(playerY,byte)
+	}
+	byte# bs becomes #,(inb,b,b0)
+	client.send(bs,3)
+	byte# resp becomes client.getResponse
+	if (resp[0],=,1) {
+		; Game hasn't started
+		retn
+	}
+	else {
+		; Game on
+		if (!gameStarted) { gameStarted becomes true }
+		player0.y becomes (resp[1]*100h)+resp[2]
+		ball.x becomes (resp[3]*100h)+resp[4]
+		ball.y becomes (resp[5]*100h)+resp[6]
+		if (ball.x,<=,0) {
+			ExitProcess(0)
+		}
+		if (ball.x,=>,form.w-5) {
+			ExitProcess(0)
+		}
+	}
+	
+	form.rePaint
+	
+}
+func(FormEventArgs e) create {
+
+	
+	Rectangle# rs becomes #,(player,player0)
+	player.x becomes 1
+	player0.x becomes 483
+	player.y becomes 200
+	player0.y becomes 200
+	ball becomes new(Ellipse)
+	ball.height becomes 25
+	ball.width becomes 25
+	form.components.add(ball)
+	byte# bs becomes #,(1)
+	client.send(bs,1)
+	byte# arr becomes client.getResponse
+	if (arr[0],=,1) { isPlayer1 becomes true }
+	else { if (arr[0],=,2) { isPlayer1 becomes false } else { ExitProcess(0) } }
+	showRects(rs)
+	form.onTimerTick.addFunction($onTick)
+	form.createTimer(17)
+	
+}
+func(KeyEventArgs e,int momentum) manageMomentum {
+
+	if (!gameStarted) { retn }
+	
+	; There are no ASCII characters for arrow keys
+	; They map to these numbers
+	; The ASCII keys mapped to these numbers would not make immediate sense
+	
+	if (e.key,=,cast(38,ASCIIKey)) {
+		playerYMomentum becomes momentum*(-1)
+	}
+	else {
+		if (e.key,=,cast(40,ASCIIKey)) {
+			playerYMomentum becomes momentum
+		}
+	}
+}
+func(KeyEventArgs e) keyDown { manageMomentum(e,playerYSpeed) }
+func(KeyEventArgs e) keyUp { manageMomentum(e,0) }
+
+form.onKeyDown.addFunction($keyDown)
+form.onFormCreation.addFunction($create)
+form.onKeyUp.addFunction($keyUp)
+form.show
