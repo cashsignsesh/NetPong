@@ -7,3 +7,5 @@
  
  
 ![Demo gif](https://github.com/cashsignsesh/NetPong/blob/main/GoodDemo.gif?raw=true|alt=octocat)
+
+The ip is hard coded to 127.0.0.1 so to replicate all you must do is open Server.exe, then two instances of Player.exe, and you can play pong vs yourself
